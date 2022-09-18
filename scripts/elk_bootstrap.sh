@@ -91,7 +91,7 @@ output {
 }
 EOF
 
-cat << EOF > /etc/logstash/conf.d/jvm.options
+cat << EOF > /etc/logstash/jvm.options
 -Xms256m
 -Xmx256m
 EOF
