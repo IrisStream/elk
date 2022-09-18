@@ -20,7 +20,7 @@ Vagrant.configure("2") do |config|
     # es1.vm.network "public_network"
 
     # File Sync Settings
-    es1.vm.synced_folder "./files/elk-server", "/tmp/setup", :mount_options => ["dmode=777", "fmode=666"]
+    # es1.vm.synced_folder "./files/elk-server", "/tmp/setup", :mount_options => ["dmode=777", "fmode=666"]
 
     # Provisioning Settings
     es1.vm.provision "shell", path: "scripts/elk_bootstrap.sh"
