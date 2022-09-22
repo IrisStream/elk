@@ -1,6 +1,3 @@
-apt -y update
-apt -y install apache2
-
 usermod -aG sudo vagrant
 HOME=/home/vagrant
 
@@ -39,20 +36,17 @@ systemctl enable --now kibana.service
              -keyout /etc/ssl/private/logstash-forwarder.key \
              -out /etc/ssl/certs/logstash-forwarder.crt 
 
-cat << EOF > /etc/logstash/conf.d/02-beats-input.conf
+cat << EOF > /etc/logstash/conf.d/filebeat.conf
 input {
   beats {
     port => 5044
-    ssl => true
+    ssl => false
     # ssl_certificate => "/etc/ssl/certs/logstash-forwarder.crt"
     # ssl_key => "/etc/ssl/private/logstash-forwarder.key"
   }
 }
-EOF
-
-cat << EOF > /etc/logstash/conf.d/10-syslog-filter.conf
 filter {
-  if [type] == "syslog" {
+  if [service][type] == "system" {
     grok {
       match => { "message" => "%{SYSLOGTIMESTAMP:syslog_timestamp} %{SYSLOGHOST:syslog_hostname} %{DATA:syslog_program}(?:\[%{POSINT:syslog_pid}\])?: %{GREEDYDATA:syslog_message}" }
       add_field => [ "received_at", "%{@timestamp}" ]
@@ -62,18 +56,46 @@ filter {
     date {
       match => [ "syslog_timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
     }
+    mutate {
+      add_tag => ["syslog"]
+    }
+  }
+  if [service][type] == "apache" {
+      grok {
+         match => { "message" => ["%{COMBINEDAPACHELOG}"] }
+        remove_field => "message"
+      }
+      mutate {
+        add_field => { "read_timestamp" => "%{@timestamp}" }
+      }
+      date {
+        match => [ "timestamp", "dd/MMM/YYYY:H:m:s Z" ]
+        remove_field => "timestamp"
+      }
+     useragent {
+       source => "agent"
+       target => "agent"
+     }
+     geoip {
+       source => "clientip"
+       target => "geoip"
+     }
+  }
+}
+output {
+  if [service][type] == "system" {
+    elasticsearch {
+      hosts => ["localhost:9200"]
+      index => "syslog-%{+YYYY.MM.dd}"
+    }
+  }
+  if [service][type] == "apache" {
+    elasticsearch {
+      hosts => ["localhost:9200"]
+      index => "apache-%{+YYYY.MM.dd}"
+    }
   }
 }
 EOF
 
-cat << EOF > /etc/logstash/conf.d/30-elasticsearch-output.conf
-output {
-  elasticsearch {
-    hosts => ["localhost:9200"]
-    sniffing => true
-    manage_template => false
-    index => "%{[@metadata][beat]}-%{+YYYY.MM.dd}"
-    document_type => "%{[@metadata][type]}"
-  }
-}
-EOF
+systemctl enable --now logstash.service

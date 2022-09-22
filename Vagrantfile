@@ -30,15 +30,15 @@ Vagrant.configure("2") do |config|
     es1.vm.provision :hosts, :sync_hosts => true
   end
 
-  config.vm.define "client" do |client|
+  config.vm.define "client-logstash" do |client|
     # Provider Settings
     client.vm.provider "virtualbox" do |vb|
       vb.memory = "1024"
-      vb.cpus = 1
+      vb.cpus = 2
     end
     client.vm.box = "ubuntu/focal64"
 
-    client.vm.hostname = "client"
+    client.vm.hostname = "client-logstash"
 
     # Network Settings
     # client.vm.network "forwarded_port", guest: 80, host: 8080
@@ -46,10 +46,36 @@ Vagrant.configure("2") do |config|
     # client.vm.network "public_network"
 
     # File Sync Settings
-    client.vm.synced_folder "./files/client", "/var/www/html", :mount_options => ["dmode=777", "fmode=666"]
+    client.vm.synced_folder "./files/client", "/var/www/html", :mount_options => ["dmode=777", "fmode=666"] , type: "rsync", rsync__args: ["--include=index.html"]
+    client.vm.synced_folder "./files/client", "/home/vagrant/config", :mount_options => ["dmode=777", "fmode=600"] , type: "rsync", rsync__args: ["--include=filebeat_logstash.yml"]
 
     # Provisioning Settings
-    client.vm.provision "shell", path: "scripts/client_bootstrap.sh"
+    client.vm.provision "shell", path: "scripts/client_logstash_bootstrap.sh"
     client.vm.provision :hosts, :sync_hosts => true
   end
+
+  config.vm.define "client-elasticsearch" do |client|
+    # Provider Settings
+    client.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.cpus = 2
+    end
+    client.vm.box = "ubuntu/focal64"
+
+    client.vm.hostname = "client-elasticsearch"
+
+    # Network Settings
+    # client.vm.network "forwarded_port", guest: 80, host: 8080
+    client.vm.network "private_network", ip: "192.168.56.7"
+    # client.vm.network "public_network"
+
+    # File Sync Settings
+    client.vm.synced_folder "./files/client", "/var/www/html", :mount_options => ["dmode=777", "fmode=666"] , type: "rsync", rsync__args: ["--include=index.html"]
+    client.vm.synced_folder "./files/client", "/home/vagrant/config", :mount_options => ["dmode=777", "fmode=600"] , type: "rsync", rsync__args: ["--include=filebeat_elasticsearch.yml"]
+
+    # Provisioning Settings
+    client.vm.provision "shell", path: "scripts/client_elasticsearch_bootstrap.sh"
+    client.vm.provision :hosts, :sync_hosts => true
+  end
+  
 end

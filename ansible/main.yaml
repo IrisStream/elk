@@ -1,0 +1,11 @@
+- name: Configure filebeat to send logs to elasticsearch
+  hosts: elasticsearch_client
+  user: vagrant
+  roles:
+    - setup-filebeat-elasticsearch
+
+- name: Configure filebeat to send logs to logstash
+  hosts: logstash_client
+  user: vagrant
+  roles:
+    - setup-filebeat-logstash

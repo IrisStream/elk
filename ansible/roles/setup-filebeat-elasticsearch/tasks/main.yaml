@@ -1,0 +1,52 @@
+- name: Update apt packages
+  become: yes
+  apt:
+    update_cache: yes
+
+- name: install apache2
+  become: yes
+  apt: 
+    name:
+      - apache2
+    update_cache: yes
+    state: latest
+
+- name: install elk packages repository 
+  command: |
+    wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+    apt -y install apt-transport-https
+    echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
+
+- name: install filebeat
+  become: yes
+  apt: 
+    name:
+      - filebeat
+    update_cache: yes
+    state: latest
+
+- name: enable apache and system modules
+  become: yes
+  working_dir: /usr/share/filebeat/bin
+  command: |
+    filebeat modules enable apache2
+    sed -i 's/false/true/g' /etc/filebeat/modules.d/apache.yml
+
+    filebeat modules enable system
+    sed -i 's/false/true/g' /etc/filebeat/modules.d/system.yml
+
+- name: copy index.html
+  copy:
+    src: files/index.html
+    dest: /var/www/html/index.html
+    owner: root
+    group: root
+    mode: '666'
+
+- name: copy filebeat.yml
+  copy:
+    src: files/filebeat.yml
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: '600'
