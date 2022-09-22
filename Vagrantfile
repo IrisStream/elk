@@ -2,14 +2,16 @@
 # vi: set ft=ruby :
 
 Vagrant.configure("2") do |config|
-  # Provider Settings
-  config.vm.provider "virtualbox" do |vb|
-    vb.memory = "2048"
-    vb.cpus = 2
-  end
 
   config.vm.define "elk-server" do |es1|
-    es1.vm.box = "ubuntu/focal64"
+    # Provider Settings
+    es1.vm.provider "virtualbox" do |vb|
+      vb.memory = "4096"
+      vb.cpus = 2
+    end
+    # es1.vm.box = "ubuntu/focal64"
+    es1.vm.box = "irisstream/elk-server"
+    es1.vm.box_version = "2.0"
 
     es1.vm.hostname = "elk-server"
 
@@ -20,14 +22,20 @@ Vagrant.configure("2") do |config|
     # es1.vm.network "public_network"
 
     # File Sync Settings
-    # es1.vm.synced_folder "./files/elk-server", "/tmp/setup", :mount_options => ["dmode=777", "fmode=666"]
+    #  es1.vm.synced_folder "./files/elk-server", "/tmp/setup", :mount_options => ["dmode=777", "fmode=666"]
 
     # Provisioning Settings
-    es1.vm.provision "shell", path: "scripts/elk_bootstrap.sh"
+    # es1.vm.provision "shell", path: "scripts/elk_bootstrap.sh"
+    es1.vm.provision "shell", path: "scripts/temp.sh"
     es1.vm.provision :hosts, :sync_hosts => true
   end
 
   config.vm.define "client" do |client|
+    # Provider Settings
+    client.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.cpus = 1
+    end
     client.vm.box = "ubuntu/focal64"
 
     client.vm.hostname = "client"

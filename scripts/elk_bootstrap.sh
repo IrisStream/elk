@@ -13,7 +13,7 @@ cat << EOF > /etc/elasticsearch/jvm.options.d/heap.options
 -Xmx256m
 EOF
 
-# start service
+#start service
 systemctl daemon-reload
 systemctl enable elasticsearch.service
 systemctl start elasticsearch.service
@@ -27,27 +27,34 @@ server.host: "192.168.56.5"
 EOF
 
 cat << EOF > /etc/kibana/node.options
---max-old-space-size=512
+--max-old-space-size=256
 EOF
+
+# Reset the password for the elastic user
+cat << EOF | /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -is
+y
+Sondeptrai123
+Sondeptrai123
+EOF
+
+#Get enrollment token for kibana
+KIBANA_ENROLL_TOKEN=$(/usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana)
+
+/usr/share/kibana/bin/kibana-setup --enrollment-token $KIBANA_ENROLL_TOKEN
 
 systemctl daemon-reload
 systemctl enable kibana.service
 systemctl start kibana.service
 
 # SSL configuration
-
-# Generate rsa key
-openssl genrsa -out /etc/ssl/private/logstash-forwarder.key 2048
-
-# Get public key
-openssl rsa -in /etc/ssl/private/logstash-forwarder.key -pubout -out /etc/ssl/public/logstash-forwarder.key
-
-# Generate csr
-openssl req -new -key /etc/ssl/private/logstash-forwarder.key -out /etc/ssl/certs/logstash-forwarder.csr
-
-# Generate crt
-openssl x509 -req -days 365 -in /etc/ssl/certs/logstash-forwarder.csr -signkey /etc/ssl/private/logstash-forwarder.key -out /etc/ssl/certs/logstash-forwarder.crt
-
+ openssl req -config /etc/ssl/openssl.cnf \
+             -x509 \
+             -days 3650 \
+             -batch \
+             -nodes \
+             -newkey rsa:2048 \
+             -keyout /etc/ssl/private/logstash-forwarder.key \
+             -out /etc/ssl/certs/logstash-forwarder.crt 
 
 # Install logstash
 apt -y install logstash
@@ -66,7 +73,7 @@ EOF
 cat << EOF > /etc/logstash/conf.d/10-syslog-filter.conf
 filter {
   if [type] == "syslog" {
-    grok {
+    grok {      
       match => { "message" => "%{SYSLOGTIMESTAMP:syslog_timestamp} %{SYSLOGHOST:syslog_hostname} %{DATA:syslog_program}(?:\[%{POSINT:syslog_pid}\])?: %{GREEDYDATA:syslog_message}" }
       add_field => [ "received_at", "%{@timestamp}" ]
       add_field => [ "received_from", "%{host}" ]
@@ -91,10 +98,8 @@ output {
 }
 EOF
 
-cat << EOF > /etc/logstash/jvm.options
--Xms256m
--Xmx256m
-EOF
+sed -i 's/-Xms1g/-Xms256m/g' /etc/logstash/jvm.options
+sed -i 's/-Xmx1g/-Xmx256m/g' /etc/logstash/jvm.options
 
 systemctl daemon-reload
 systemctl enable logstash.service
