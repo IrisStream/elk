@@ -1,50 +1,30 @@
-wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+usermod -aG sudo vagrant
+HOME=/home/vagrant
 
-apt -y install apt-transport-https
+# Configure elasticsearch
+sed -i 's/#network.host:.*/network.host: 0.0.0.0/g' /etc/elasticsearch/elasticsearch.yml
+sed -i 's/#node.name: node-1/node.name: node-1/g' /etc/elasticsearch/elasticsearch.yml
+sed -i 's/xpack.security.enabled: true/xpack.security.enabled: false/g' /etc/elasticsearch/elasticsearch.yml
+sed -i 's/cluster.initial_master_nodes:.*/cluster.initial_master_nodes: ["node-1"]/g' /etc/elasticsearch/elasticsearch.yml
 
-echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
-
-apt -y update 
-apt -y install elasticsearch
-
-# heap size configuration
 cat << EOF > /etc/elasticsearch/jvm.options.d/heap.options
--Xms256m
--Xmx256m
+-Xms512m
+-Xmx512m
 EOF
-
-#start service
-systemctl daemon-reload
-systemctl enable elasticsearch.service
-systemctl start elasticsearch.service
-
-# Install kibana
-apt -y install kibana 
-
-cat << EOF > /etc/kibana/kibana.yml
-server.port: 5601
-server.host: "192.168.56.5"
-EOF
-
-cat << EOF > /etc/kibana/node.options
---max-old-space-size=256
-EOF
-
-# Reset the password for the elastic user
-cat << EOF | /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -is
-y
-Sondeptrai123
-Sondeptrai123
-EOF
-
-#Get enrollment token for kibana
-KIBANA_ENROLL_TOKEN=$(/usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana)
-
-/usr/share/kibana/bin/kibana-setup --enrollment-token $KIBANA_ENROLL_TOKEN
 
 systemctl daemon-reload
-systemctl enable kibana.service
-systemctl start kibana.service
+systemctl enable --now elasticsearch.service
+
+# Configure kibana
+sed -i 's/#server.port: 5601/server.port: 5601/g' /etc/kibana/kibana.yml
+sed -i 's/#server.host:.*/server.host: "0.0.0.0"/g' /etc/kibana/kibana.yml
+sed -i 's/#--max-old-space-size=4096/--max-old-space-size=512/g' /etc/kibana/node.options
+
+# Configure logstash
+sed -i 's/-Xms1g/-Xms512m/g' /etc/logstash/jvm.options
+sed -i 's/-Xmx1g/-Xmx512m/g' /etc/logstash/jvm.options
+
+systemctl enable --now kibana.service
 
 # SSL configuration
  openssl req -config /etc/ssl/openssl.cnf \
@@ -56,24 +36,18 @@ systemctl start kibana.service
              -keyout /etc/ssl/private/logstash-forwarder.key \
              -out /etc/ssl/certs/logstash-forwarder.crt 
 
-# Install logstash
-apt -y install logstash
-
-cat << EOF > /etc/logstash/conf.d/02-beats-input.conf
+cat << EOF > /etc/logstash/conf.d/filebeat.conf
 input {
   beats {
     port => 5044
-    ssl => true
-    ssl_certificate => "/etc/ssl/certs/logstash-forwarder.crt"
-    ssl_key => "/etc/ssl/private/logstash-forwarder.key"
+    ssl => false
+    # ssl_certificate => "/etc/ssl/certs/logstash-forwarder.crt"
+    # ssl_key => "/etc/ssl/private/logstash-forwarder.key"
   }
 }
-EOF 
-
-cat << EOF > /etc/logstash/conf.d/10-syslog-filter.conf
 filter {
-  if [type] == "syslog" {
-    grok {      
+  if [service][type] == "system" {
+    grok {
       match => { "message" => "%{SYSLOGTIMESTAMP:syslog_timestamp} %{SYSLOGHOST:syslog_hostname} %{DATA:syslog_program}(?:\[%{POSINT:syslog_pid}\])?: %{GREEDYDATA:syslog_message}" }
       add_field => [ "received_at", "%{@timestamp}" ]
       add_field => [ "received_from", "%{host}" ]
@@ -82,25 +56,46 @@ filter {
     date {
       match => [ "syslog_timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
     }
+    mutate {
+      add_tag => ["syslog"]
+    }
+  }
+  if [service][type] == "apache" {
+      grok {
+         match => { "message" => ["%{COMBINEDAPACHELOG}"] }
+        remove_field => "message"
+      }
+      mutate {
+        add_field => { "read_timestamp" => "%{@timestamp}" }
+      }
+      date {
+        match => [ "timestamp", "dd/MMM/YYYY:H:m:s Z" ]
+        remove_field => "timestamp"
+      }
+     useragent {
+       source => "agent"
+       target => "agent"
+     }
+     geoip {
+       source => "clientip"
+       target => "geoip"
+     }
   }
 }
-EOF
-
-cat << EOF > /etc/logstash/conf.d/30-elasticsearch-output.conf
 output {
-  elasticsearch {
-    hosts => ["localhost:9200"]
-    sniffing => true
-    manage_template => false
-    index => "%{[@metadata][beat]}-%{+YYYY.MM.dd}"
-    document_type => "%{[@metadata][type]}"
+  if [service][type] == "system" {
+    elasticsearch {
+      hosts => ["localhost:9200"]
+      index => "syslog-%{+YYYY.MM.dd}"
+    }
+  }
+  if [service][type] == "apache" {
+    elasticsearch {
+      hosts => ["localhost:9200"]
+      index => "apache-%{+YYYY.MM.dd}"
+    }
   }
 }
 EOF
 
-sed -i 's/-Xms1g/-Xms256m/g' /etc/logstash/jvm.options
-sed -i 's/-Xmx1g/-Xmx256m/g' /etc/logstash/jvm.options
-
-systemctl daemon-reload
-systemctl enable logstash.service
-systemctl start logstash.service
+systemctl enable --now logstash.service

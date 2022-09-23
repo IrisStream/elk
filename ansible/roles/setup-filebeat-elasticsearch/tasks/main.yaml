@@ -3,50 +3,62 @@
   apt:
     update_cache: yes
 
-- name: install apache2
+- name: APT - Add elastic.co key
+  become: yes
+  apt_key: url="https://artifacts.elastic.co/GPG-KEY-elasticsearch"
+  when: ansible_distribution == "Ubuntu"
+
+- name: APT - Add elastic.co repository
+  become: yes
+  apt_repository: repo="deb https://artifacts.elastic.co/packages/8.x/apt stable main" filename="elastic-keyring" update_cache=yes
+  when: ansible_distribution == "Ubuntu"
+
+- name: FILEBEAT - Install Filebeat
   become: yes
   apt: 
-    name:
-      - apache2
-    update_cache: yes
-    state: latest
-
-- name: install elk packages repository 
-  command: |
-    wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
-    apt -y install apt-transport-https
-    echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
-
-- name: install filebeat
-  become: yes
-  apt: 
-    name:
+    name: 
       - filebeat
     update_cache: yes
     state: latest
-
-- name: enable apache and system modules
+  
+- name: enable apache module
   become: yes
-  working_dir: /usr/share/filebeat/bin
-  command: |
-    filebeat modules enable apache2
-    sed -i 's/false/true/g' /etc/filebeat/modules.d/apache.yml
+  command: 
+    chdir: /usr/share/filebeat/bin
+    cmd:  filebeat modules enable apache
 
-    filebeat modules enable system
-    sed -i 's/false/true/g' /etc/filebeat/modules.d/system.yml
+- name: Modify apache module's configuration
+  become: yes
+  replace:
+    path: /etc/filebeat/modules.d/apache.yml
+    regexp: 'false'
+    replace: 'true'
 
-- name: copy index.html
-  copy:
-    src: files/index.html
-    dest: /var/www/html/index.html
-    owner: root
-    group: root
-    mode: '666'
+- name: enable system module
+  become: yes
+  command: 
+    chdir: /usr/share/filebeat/bin
+    cmd:  filebeat modules enable system
+
+- name: Modify system module's configuration
+  become: yes
+  replace:
+    path: /etc/filebeat/modules.d/system.yml
+    regexp: 'false'
+    replace: 'true'
 
 - name: copy filebeat.yml
+  become: yes
   copy:
     src: files/filebeat.yml
     dest: /etc/filebeat/filebeat.yml
     owner: root
     group: root
     mode: '600'
+      
+- name: start filebeat
+  become: yes
+  service:
+    name: filebeat
+    state: started
+    enabled: yes

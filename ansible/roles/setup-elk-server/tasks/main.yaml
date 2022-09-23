@@ -1,0 +1,86 @@
+- name: Update apt packages
+  become: yes
+  apt:
+    update_cache: yes
+
+- name: APT - Add elastic.co key
+  become: yes
+  apt_key: url="https://artifacts.elastic.co/GPG-KEY-elasticsearch"
+
+- name: APT - Add elastic.co repository
+  become: yes
+  apt_repository: repo="deb https://artifacts.elastic.co/packages/8.x/apt stable main" filename="elastic-keyring" update_cache=yes
+
+- name: Install ELK stask 
+  become: yes
+  apt: 
+    name: 
+      - elasticsearch
+      - kibana
+      - logstash
+    update_cache: yes
+    state: latest
+
+- name: Copy elasticsearch config file
+  become: yes
+  copy:
+    src: files/elasticsearch.yml
+    dest: /etc/elasticsearch/elasticsearch.yml
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Config heap size of elasticsearch service
+  become: yes
+  copy:
+    src: files/heap.options
+    dest: /etc/elasticsearch/jvm.options.d/heap.options
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy kibana config file
+  become: yes
+  copy:
+    src: files/kibana.yml
+    dest: /etc/kibana/kibana.yml
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy logstash config file
+  become: yes
+  copy:
+    src: files/filebeat.conf
+    dest: /etc/logstash/conf.d/filebeat.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Config heap size of logstash service
+  become: yes
+  replace:
+    path: /etc/logstash/jvm.options
+    regexp: '-Xms1g\n-Xmx1g'
+    replace: '-Xms512m\n-Xmx512m'
+
+- name: Start elasticsearch service
+  become: yes 
+  service:
+    name: elasticsearch
+    state: started
+    enabled: yes
+
+- name: Start kibana service
+  become: yes
+  service:
+    name: kibana
+    state: started
+    enabled: yes
+
+- name: Start logstash service
+  become: yes
+  service:
+    name: logstash
+    state: started
+    enabled: yes

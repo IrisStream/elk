@@ -2,3 +2,63 @@
   become: yes
   apt:
     update_cache: yes
+
+- name: APT - Add elastic.co key
+  become: yes
+  apt_key: url="https://artifacts.elastic.co/GPG-KEY-elasticsearch"
+  when: ansible_distribution == "Ubuntu"
+
+- name: APT - Add elastic.co repository
+  become: yes
+  apt_repository: repo="deb https://artifacts.elastic.co/packages/8.x/apt stable main" filename="elastic-keyring" update_cache=yes
+  when: ansible_distribution == "Ubuntu"
+
+- name: FILEBEAT - Install Filebeat
+  become: yes
+  apt: 
+    name: 
+      - filebeat
+    update_cache: yes
+    state: latest
+  
+- name: enable apache module
+  become: yes
+  command: 
+    chdir: /usr/share/filebeat/bin
+    cmd:  filebeat modules enable apache
+
+- name: Modify apache module's configuration
+  become: yes
+  replace:
+    path: /etc/filebeat/modules.d/apache.yml
+    regexp: 'false'
+    replace: 'true'
+
+- name: enable system module
+  become: yes
+  command: 
+    chdir: /usr/share/filebeat/bin
+    cmd:  filebeat modules enable system
+
+- name: Modify system module's configuration
+  become: yes
+  replace:
+    path: /etc/filebeat/modules.d/system.yml
+    regexp: 'false'
+    replace: 'true'
+
+- name: copy filebeat.yml
+  become: yes
+  copy:
+    src: files/filebeat.yml
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: '600'
+
+- name: start filebeat
+  become: yes
+  service:
+    name: filebeat
+    state: started
+    enabled: yes

@@ -1,11 +1,17 @@
+- name: Configure ELK on ELK server
+  hosts: elk-server
+  user: vagrant
+  roles:
+    - setup-elk-server
+
 - name: Configure filebeat to send logs to elasticsearch
-  hosts: elasticsearch_client
+  hosts: client-elasticsearch
   user: vagrant
   roles:
     - setup-filebeat-elasticsearch
 
 - name: Configure filebeat to send logs to logstash
-  hosts: logstash_client
+  hosts: client-logstash
   user: vagrant
   roles:
     - setup-filebeat-logstash
