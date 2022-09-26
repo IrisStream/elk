@@ -37,7 +37,7 @@ Vagrant.configure("2") do |config|
     client.vm.synced_folder "./files/client-logstash/", "/var/www/html", :mount_options => ["dmode=777", "fmode=666"]
 
     # Provisioning Settings
-    client.vm.provision "shell", path: "scripts/client_logstash_bootstrap.sh"
+    client.vm.provision "shell", path: "bootstrap-scripts/client_logstash_bootstrap.sh"
     client.vm.provision :hosts, :sync_hosts => true
   end
 
@@ -58,7 +58,7 @@ Vagrant.configure("2") do |config|
     client.vm.synced_folder "./files/client-elasticsearch", "/var/www/html", :mount_options => ["dmode=777", "fmode=666"]
 
     # Provisioning Settings
-    client.vm.provision "shell", path: "scripts/client_elasticsearch_bootstrap.sh"
+    client.vm.provision "shell", path: "bootstrap-scripts/client_elasticsearch_bootstrap.sh"
     client.vm.provision :hosts, :sync_hosts => true
   end
   

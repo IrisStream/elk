@@ -2,6 +2,8 @@
 
 vagrant up
 
-rm -rf ~/.ssh/known_hosts
+ssh-keygen -R "elk-server"
+ssh-keygen -R "client-logstash"
+ssh-keygen -R "clieng-elasticsearch"
 
-ansible-playbook -i ansible/inventory.txt ansible/main.yaml
+ansible-playbook -i inventory.txt main.yaml
